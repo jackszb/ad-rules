@@ -1,3 +1,2 @@
 # 手动添加需要屏蔽的域名，每行一个
-analytics.example.com
-tracking.somesite.com
+api-fp-retry-bj.fengkongcloud.com
