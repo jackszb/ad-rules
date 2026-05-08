@@ -1,0 +1,60 @@
+name: Build AdBlock SRS
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "0 2 * * *"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Python dependencies
+        run: pip install requests
+
+      - name: Install sing-box
+        run: |
+          curl -fsSL -o sing-box-1.13.11-linux-amd64.tar.gz \
+            "https://github.com/SagerNet/sing-box/releases/download/v1.13.11/sing-box-1.13.11-linux-amd64.tar.gz"
+          tar -xzf sing-box-1.13.11-linux-amd64.tar.gz
+          sudo mv sing-box-1.13.11-linux-amd64/sing-box /usr/local/bin/
+          sudo chmod +x /usr/local/bin/sing-box
+          sing-box version
+
+      - name: Run convert.py
+        run: python3 convert.py
+
+      - name: Organize files
+        run: |
+          mkdir -p rule_json rule_srs
+          [ -f adblock_rules.json ] && mv adblock_rules.json ./rule_json/
+          [ -f adblock_rules.srs ] && mv adblock_rules.srs ./rule_srs/
+
+      - name: Commit and Push
+        run: |
+          git config --global user.email "action@github.com"
+          git config --global user.name "GitHub Action"
+          git add rule_json/adblock_rules.json
+          git add rule_srs/adblock_rules.srs
+          if git diff --staged --quiet; then
+            echo "没有检测到规则变化，跳过提交。"
+          else
+            git commit -m "Auto-update AdBlock rules $(date +'%Y-%m-%d %H:%M')"
+            git pull --rebase origin main
+            git push origin main
+          fi
