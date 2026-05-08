@@ -1,3 +1,4 @@
 # 手动添加需要放行的域名，每行一个
 # 会从最终规则中移除这些域名及其父域匹配
-ads.example.com
+gia.jd.com
+api.m.jd.com
