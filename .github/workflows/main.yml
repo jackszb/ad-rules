@@ -1,9 +1,9 @@
 name: Build AdBlock SRS
 
-于:
+on:
   workflow_dispatch:
   push:
-    分支: [main]
+    branches: [main]
   schedule:
     - cron: "0 2 * * *"
 
@@ -66,5 +66,5 @@ jobs:
           tag_name: "latest"
           name: "AdBlock Rules — $(date +'%Y-%m-%d')"
           body_path: release_notes.md
-          文件: rule_srs/adblock_rules.srs
+          files: rule_srs/adblock_rules.srs
           make_latest: true
