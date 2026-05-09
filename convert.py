@@ -19,8 +19,8 @@ BLOCK_FILE      = "custom_block.txt"
 ALLOW_FILE      = "custom_allow.txt"
 JSON_OUTPUT     = "adblock_rules.json"
 SRS_OUTPUT      = "adblock_rules.srs"
-STATS_FILE      = "stats.json"           # 持久化上次统计数据
-REPORT_FILE     = "release_notes.md"    # 供 workflow 读取的发布说明
+STATS_FILE      = "stats.json"
+REPORT_FILE     = "release_notes.md"
 SING_BOX_BIN    = "sing-box"
 RULESET_VERSION = 2
 TIMEOUT         = 60
@@ -45,7 +45,7 @@ def normalize_domain(domain: str) -> str:
 def load_sources(path: str) -> list:
     p = Path(path)
     if not p.is_file():
-        print(f"[-] 错误: 找不到 {path}")
+        print("[-] 错误: 找不到 " + path)
         exit(1)
     sources = []
     with p.open("r", encoding="utf-8") as f:
@@ -88,13 +88,13 @@ def save_stats(data: dict):
 
 
 def fetch_text(url: str) -> str:
-    print(f"[+] 正在抓取: {url}")
+    print("[+] 正在抓取: " + url)
     try:
         resp = requests.get(url, timeout=TIMEOUT)
         resp.raise_for_status()
         return resp.text
     except Exception as e:
-        print(f"[!] 抓取失败 {url}: {e}")
+        print("[!] 抓取失败 " + url + ": " + str(e))
         return ""
 
 
@@ -145,18 +145,18 @@ def dedupe_subdomains(domains: set) -> list:
 
 
 def generate_report(
-    now_str: str,
-    sources: list,
-    source_counts: dict,
-    total_raw: int,
-    custom_block_count: int,
-    custom_allow_count: int,
-    allow_removed: int,
-    before_dedup: int,
-    final_count: int,
-    last_stats: dict,
-    srs_size_kb: float,
-) -> str:
+    now_str,
+    sources,
+    source_counts,
+    total_raw,
+    custom_block_count,
+    custom_allow_count,
+    allow_removed,
+    before_dedup,
+    final_count,
+    last_stats,
+    srs_size_kb,
+):
     last_count = last_stats.get("final_count", None)
 
     if last_count is None:
@@ -164,47 +164,171 @@ def generate_report(
     else:
         delta = final_count - last_count
         if delta > 0:
-            diff_str = f"🔺 较上次增加 **{delta:,}** 条"
+            diff_str = "🔺 较上次增加 **" + str(delta) + "** 条"
         elif delta < 0:
-            diff_str = f"🔻 较上次减少 **{abs(delta):,}** 条"
+            diff_str = "🔻 较上次减少 **" + str(abs(delta)) + "** 条"
         else:
             diff_str = "➡️ 与上次相比无变化"
 
     source_lines = "\n".join(
-        f"  - `{url}` → 解析出 **{source_counts.get(url, 0):,}** 个域名"
+        "  - `" + url + "` → 解析出 **" + str(source_counts.get(url, 0)) + "** 个域名"
         for url in sources
     )
 
-    report = f"""## 📦 AdBlock Rules — {now_str}
+    sing_box_snippet = (
+        "```json\n"
+        "{\n"
+        '  "type": "remote",\n'
+        '  "tag": "adblock",\n'
+        '  "url": "https://github.com/{REPO}/releases/latest/download/adblock_rules.srs",\n'
+        '  "update_interval": "24h"\n'
+        "}\n"
+        "```"
+    )
 
-### 📊 本次统计
+    lines = [
+        "## 📦 AdBlock Rules — " + now_str,
+        "",
+        "### 📊 本次统计",
+        "",
+        "| 项目 | 数量 |",
+        "|---|---|",
+        "| 订阅源数量 | " + str(len(sources)) + " 个 |",
+        "| 订阅解析原始域名 | " + str(total_raw) + " 个 |",
+        "| 自定义屏蔽追加 | " + str(custom_block_count) + " 个 |",
+        "| 白名单移除 | " + str(allow_removed) + " 个 |",
+        "| 子域名去冗余前 | " + str(before_dedup) + " 个 |",
+        "| **最终规则数量** | **" + str(final_count) + " 个** |",
+        "| SRS 文件大小 | " + str(round(srs_size_kb, 1)) + " KB |",
+        "",
+        "### 📈 变化对比",
+        "",
+        diff_str,
+        "",
+        "### 📥 订阅源明细",
+        "",
+        source_lines,
+        "",
+        "### 🚀 使用方式",
+        "",
+        "在 sing-box 配置中引用（DNS 规则和路由规则均可）：",
+        "",
+        sing_box_snippet,
+    ]
 
-| 项目 | 数量 |
-|---|---|
-| 订阅源数量 | {len(sources)} 个 |
-| 订阅解析原始域名 | {total_raw:,} 个 |
-| 自定义屏蔽追加 | {custom_block_count:,} 个 |
-| 白名单移除 | {allow_removed:,} 个 |
-| 子域名去冗余前 | {before_dedup:,} 个 |
-| **最终规则数量** | **{final_count:,} 个** |
-| SRS 文件大小 | {srs_size_kb:.1f} KB |
+    return "\n".join(lines)
 
-### 📈 变化对比
 
-{diff_str}
+def main():
+    print("[*] 启动转换流程 (sing-box v1.13.x)")
+    now = datetime.now(CST)
+    now_str = now.strftime("%Y-%m-%d %H:%M CST")
 
-### 📥 订阅源明细
+    # 1. 下载并解析订阅
+    sources = load_sources(SOURCE_FILE)
+    all_domains: set = set()
+    source_counts: dict = {}
 
-{source_lines}
+    for url in sources:
+        text = fetch_text(url)
+        if text:
+            extracted = parse_rules(text)
+            source_counts[url] = len(extracted)
+            print("[+] 解析出 " + str(len(extracted)) + " 个独立域名")
+            all_domains |= extracted
 
-### 🚀 使用方式
+    if not all_domains:
+        print("[-] 没有抓取到任何有效域名，任务停止。")
+        return
 
-在 sing-box 配置中引用（DNS 规则和路由规则均可）：
+    total_raw = len(all_domains)
 
-```json
-{{
-  "type": "remote",
-  "tag": "adblock",
-  "url": "https://github.com/{{REPO}}/releases/latest/download/adblock_rules.srs",
-  "update_interval": "24h"
-}}
+    # 2. 合并自定义屏蔽
+    custom_block = load_custom(BLOCK_FILE)
+    if custom_block:
+        print("[+] 自定义屏蔽: " + str(len(custom_block)) + " 个域名")
+        all_domains |= custom_block
+    else:
+        print("[*] 未找到 " + BLOCK_FILE + " 或文件为空，跳过自定义屏蔽")
+
+    # 3. 应用白名单
+    custom_allow = load_custom(ALLOW_FILE)
+    allow_removed = 0
+    if custom_allow:
+        before = len(all_domains)
+        all_domains = {
+            d for d in all_domains
+            if d not in custom_allow
+            and not any(d.endswith('.' + a) for a in custom_allow)
+        }
+        allow_removed = before - len(all_domains)
+        print("[+] 白名单放行: 移除 " + str(allow_removed) + " 个域名")
+    else:
+        print("[*] 未找到 " + ALLOW_FILE + " 或文件为空，跳过白名单")
+
+    # 4. 子域名去冗余
+    before_dedup = len(all_domains)
+    print("[*] 去重前总计: " + str(before_dedup) + " 个域名")
+    deduped = dedupe_subdomains(all_domains)
+    final_count = len(deduped)
+    print("[*] 子域名去冗余后: " + str(final_count) + " 个域名")
+
+    # 5. 生成 JSON
+    ruleset_json = {
+        "version": RULESET_VERSION,
+        "rules": [{"domain_suffix": deduped}]
+    }
+    with open(JSON_OUTPUT, "w", encoding="utf-8") as f:
+        json.dump(ruleset_json, f, ensure_ascii=False, indent=2)
+    print("[+] 已生成 JSON: " + JSON_OUTPUT)
+
+    # 6. 编译 SRS
+    print("[+] 正在调用 sing-box 编译 SRS...")
+    try:
+        result = subprocess.run(
+            [SING_BOX_BIN, "rule-set", "compile", "--output", SRS_OUTPUT, JSON_OUTPUT],
+            capture_output=True,
+            text=True
+        )
+        if result.returncode == 0:
+            print("[#] 成功生成: " + str(Path(SRS_OUTPUT).resolve()))
+        else:
+            print("[!] 编译失败 (Exit Code " + str(result.returncode) + "):\n" + result.stderr)
+            exit(result.returncode)
+    except FileNotFoundError:
+        print("[-] 错误: 系统中未找到 sing-box 命令，请检查安装路径。")
+        exit(1)
+
+    srs_size_kb = Path(SRS_OUTPUT).stat().st_size / 1024
+
+    # 7. 生成统计报告
+    last_stats = load_last_stats()
+    report = generate_report(
+        now_str            = now_str,
+        sources            = sources,
+        source_counts      = source_counts,
+        total_raw          = total_raw,
+        custom_block_count = len(custom_block),
+        custom_allow_count = len(custom_allow),
+        allow_removed      = allow_removed,
+        before_dedup       = before_dedup,
+        final_count        = final_count,
+        last_stats         = last_stats,
+        srs_size_kb        = srs_size_kb,
+    )
+
+    with open(REPORT_FILE, "w", encoding="utf-8") as f:
+        f.write(report)
+    print("[+] 已生成发布说明: " + REPORT_FILE)
+    print(report)
+
+    # 8. 持久化本次统计
+    save_stats({
+        "final_count": final_count,
+        "updated_at":  now_str,
+    })
+    print("[+] 已保存统计数据: " + STATS_FILE)
+
+
+if __name__ == "__main__":
+    main()
