@@ -13,8 +13,6 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-    env:
-      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -61,4 +59,4 @@ jobs:
             git commit -m "Auto-update AdBlock rules $(date +'%Y-%m-%d %H:%M')"
             git pull --rebase origin main
             git push origin main
-          f1
+          fi
