@@ -3,7 +3,7 @@
 """
 convert.py
 针对 sing-box 1.13.x 版本优化
-功能：下载 -> 解析域名 -> 全局去重 -> 子域名去冗余 -> 自定义规则 -> 生成 JSON -> 编译 SRS -> 输出统计报告
+功能：下载 -> 解析域名 -> 全局去重 -> 子域名去冗余 -> 自定义规则 -> 生成 JSON -> 编译 SRS -> 输出统计报告 -> 更新 README
 """
 
 import re
@@ -25,6 +25,9 @@ SING_BOX_BIN    = "sing-box"
 RULESET_VERSION = 2
 TIMEOUT         = 60
 CST             = timezone(timedelta(hours=8))
+REPO_USER       = "emanresubuh"
+REPO_NAME       = "ad-rules"
+SRS_URL         = "https://raw.githubusercontent.com/" + REPO_USER + "/" + REPO_NAME + "/main/rule_srs/adblock_rules.srs"
 # -------------------------
 
 HOSTS_RE   = re.compile(r"^(?:0\.0\.0\.0|127\.0\.0\.1|::1)\s+([a-z0-9.-]+\.[a-z]{2,})")
@@ -180,7 +183,7 @@ def generate_report(
         "{\n"
         '  "type": "remote",\n'
         '  "tag": "adblock",\n'
-        '  "url": "https://github.com/{REPO}/releases/latest/download/adblock_rules.srs",\n'
+        '  "url": "' + SRS_URL + '",\n'
         '  "update_interval": "24h"\n'
         "}\n"
         "```"
@@ -328,6 +331,20 @@ def main():
         "updated_at":  now_str,
     })
     print("[+] 已保存统计数据: " + STATS_FILE)
+
+    # 9. 更新 README.md
+    readme_content = (
+        "# AdBlock Rules\n\n"
+        "## 订阅链接\n\n"
+        "```\n"
+        + SRS_URL + "\n"
+        "```\n\n"
+        "## 最新构建报告\n\n"
+        + report
+    )
+    with open("README.md", "w", encoding="utf-8") as f:
+        f.write(readme_content)
+    print("[+] 已更新 README.md")
 
 
 if __name__ == "__main__":
