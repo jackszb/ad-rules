@@ -52,6 +52,7 @@ jobs:
           git add rule_json/adblock_rules.json
           git add rule_srs/adblock_rules.srs
           git add stats.json
+          git add README.md
           if git diff --staged --quiet; then
             echo "没有检测到规则变化，跳过提交。"
           else
@@ -59,12 +60,3 @@ jobs:
             git pull --rebase origin main
             git push origin main
           fi
-
-      - name: Publish Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: "latest"
-          name: "AdBlock Rules — $(date +'%Y-%m-%d')"
-          body_path: release_notes.md
-          files: rule_srs/adblock_rules.srs
-          make_latest: true
