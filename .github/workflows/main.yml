@@ -10,19 +10,20 @@ on:
 permissions:
   contents: write
 
-env:
-  # 强制所有 JavaScript Actions 使用 Node.js 24
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      # 强制 Actions 使用 Node.js 24
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4  # v4 已经支持 Node.js 24
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Python
-        uses: actions/setup-python@v5  # v5 最新版本
+        uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
