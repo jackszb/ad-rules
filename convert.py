@@ -22,7 +22,7 @@ SRS_OUTPUT       = "adblock_rules.srs"
 STATS_FILE       = "stats.json"
 REPORT_FILE      = "release_notes.md"
 SING_BOX_BIN     = "sing-box"
-RULESET_VERSION  = 2
+RULESET_VERSION  = 5  # 修改为 5
 TIMEOUT          = 60
 CST              = timezone(timedelta(hours=8))
 REPO_USER        = "emanresubuh"
@@ -116,15 +116,12 @@ def parse_rules(text: str) -> set:
         if not line or line.startswith(("!", "#", "@@")):
             continue
 
-        # 跳过 cosmetic/脚本规则：## #@# #$# #%# #?# #script:
         if COSMETIC_RE.search(line):
             continue
 
-        # 跳过包含 http 或路径斜杠的行，避免误提取 URL 中的域名
         if SKIP_LINE_RE.search(line):
             continue
 
-        # 1. AdGuard 格式：||example.com^
         m = ADGUARD_RE.match(line)
         if m:
             d = normalize_domain(m.group(1))
@@ -132,7 +129,6 @@ def parse_rules(text: str) -> set:
                 domains.add(d)
             continue
 
-        # 2. Hosts 格式：0.0.0.0 example.com
         m = HOSTS_RE.match(line)
         if m:
             d = normalize_domain(m.group(1))
@@ -140,7 +136,6 @@ def parse_rules(text: str) -> set:
                 domains.add(d)
             continue
 
-        # 3. 纯域名格式
         parts = line.split()
         if parts:
             candidate = normalize_domain(parts[0])
@@ -248,7 +243,6 @@ def main():
     now = datetime.now(CST)
     now_str = now.strftime("%Y-%m-%d %H:%M CST")
 
-    # 1. 下载并解析订阅
     sources = load_sources(SOURCE_FILE)
     all_domains: set = set()
     source_counts: dict = {}
@@ -267,7 +261,6 @@ def main():
 
     total_raw = len(all_domains)
 
-    # 2. 合并自定义屏蔽
     custom_block = load_custom(BLOCK_FILE)
     if custom_block:
         print("[+] 自定义屏蔽: " + str(len(custom_block)) + " 个域名")
@@ -275,7 +268,6 @@ def main():
     else:
         print("[*] 未找到 " + BLOCK_FILE + " 或文件为空，跳过自定义屏蔽")
 
-    # 3. 应用白名单
     custom_allow = load_custom(ALLOW_FILE)
     allow_removed = 0
     if custom_allow:
@@ -290,23 +282,22 @@ def main():
     else:
         print("[*] 未找到 " + ALLOW_FILE + " 或文件为空，跳过白名单")
 
-    # 4. 子域名去冗余
     before_dedup = len(all_domains)
     print("[*] 去重前总计: " + str(before_dedup) + " 个域名")
     deduped = dedupe_subdomains(all_domains)
     final_count = len(deduped)
     print("[*] 子域名去冗余后: " + str(final_count) + " 个域名")
 
-    # 5. 生成 JSON
+    # 生成 JSON 并排序去重
+    sorted_domains = sorted(set(deduped))
     ruleset_json = {
         "version": RULESET_VERSION,
-        "rules": [{"domain_suffix": deduped}]
+        "rules": [{"domain_suffix": sorted_domains}]
     }
     with open(JSON_OUTPUT, "w", encoding="utf-8") as f:
         json.dump(ruleset_json, f, ensure_ascii=False, indent=2)
     print("[+] 已生成 JSON: " + JSON_OUTPUT)
 
-    # 6. 编译 SRS
     print("[+] 正在调用 sing-box 编译 SRS...")
     try:
         result = subprocess.run(
@@ -325,7 +316,6 @@ def main():
 
     srs_size_kb = Path(SRS_OUTPUT).stat().st_size / 1024
 
-    # 7. 生成统计报告
     last_stats = load_last_stats()
     report = generate_report(
         now_str            = now_str,
@@ -346,14 +336,12 @@ def main():
     print("[+] 已生成发布说明: " + REPORT_FILE)
     print(report)
 
-    # 8. 持久化本次统计
     save_stats({
         "final_count": final_count,
         "updated_at":  now_str,
     })
     print("[+] 已保存统计数据: " + STATS_FILE)
 
-    # 9. 更新 README.md
     readme_content = (
         "# AdBlock Rules\n\n"
         "## 订阅链接\n\n"
