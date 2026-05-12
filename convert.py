@@ -22,7 +22,7 @@ SRS_OUTPUT       = "adblock_rules.srs"
 STATS_FILE       = "stats.json"
 REPORT_FILE      = "release_notes.md"
 SING_BOX_BIN     = "sing-box"
-RULESET_VERSION  = 5  # 修改为 5
+RULESET_VERSION  = 4  # 修改为 4
 TIMEOUT          = 60
 CST              = timezone(timedelta(hours=8))
 REPO_USER        = "emanresubuh"
