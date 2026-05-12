@@ -131,6 +131,7 @@ def fetch_text(url: str) -> str:
 
 
 def parse_rules(text: str) -> Set[str]:
+    """严格解析规则（参考 217heidai 实践）"""
     domains: Set[str] = set()
     bad_keywords = {'/^', '/$', 'regex', 'domain=', '\( dnstype', 'denyallow', '[ \)', 
                    'important', 'third-party', 'popup', 'generichide', '*'}
@@ -167,6 +168,7 @@ def parse_rules(text: str) -> Set[str]:
 
 
 def should_keep_domain(d: str) -> bool:
+    """域名过滤核心逻辑"""
     if not d or len(d) < 4 or '..' in d or d in INVALID_DOMAINS or d in WHITELIST_DOMAINS:
         return False
     if is_public_suffix(d) or any(d.endswith(s) for s in PRIVATE_SUFFIXES):
@@ -179,6 +181,7 @@ def should_keep_domain(d: str) -> bool:
 
 
 def dedupe_subdomains(domains: Set[str]) -> List[str]:
+    """子域名去冗余（短域名优先）"""
     sorted_domains = sorted(domains, key=lambda x: (len(x), x))
     result = []
     domain_set = set(domains)
@@ -332,11 +335,10 @@ def main():
     final_count = len(deduped)
     print(f"[*] 子域名去冗余后: {final_count} 个域名")
 
-    # 生成 JSON（domain_suffix 去重并排序）
-    sorted_domains = sorted(set(deduped))
+    # 生成 JSON，子集 domain_suffix 去重并排序
     ruleset_json = {
         "version": RULESET_VERSION,
-        "rules": [{"domain_suffix": sorted_domains}]
+        "rules": [{"domain_suffix": sorted(set(deduped))}]
     }
     with open(JSON_OUTPUT, "w", encoding="utf-8") as f:
         json.dump(ruleset_json, f, ensure_ascii=False, indent=2)
