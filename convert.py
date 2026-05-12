@@ -14,30 +14,38 @@ from datetime import datetime, timezone, timedelta
 import requests
 
 # -------- 配置区域 --------
-SOURCE_FILE     = "source.txt"
-BLOCK_FILE      = "custom_block.txt"
-ALLOW_FILE      = "custom_allow.txt"
-JSON_OUTPUT     = "adblock_rules.json"
-SRS_OUTPUT      = "adblock_rules.srs"
-STATS_FILE      = "stats.json"
-REPORT_FILE     = "release_notes.md"
-SING_BOX_BIN    = "sing-box"
-RULESET_VERSION = 2
-TIMEOUT         = 60
-CST             = timezone(timedelta(hours=8))
-REPO_USER       = "emanresubuh"
-REPO_NAME       = "ad-rules"
-SRS_URL         = "https://raw.githubusercontent.com/" + REPO_USER + "/" + REPO_NAME + "/main/rule_srs/adblock_rules.srs"
+SOURCE_FILE      = "source.txt"
+BLOCK_FILE       = "custom_block.txt"
+ALLOW_FILE       = "custom_allow.txt"
+JSON_OUTPUT      = "adblock_rules.json"
+SRS_OUTPUT       = "adblock_rules.srs"
+STATS_FILE       = "stats.json"
+REPORT_FILE      = "release_notes.md"
+SING_BOX_BIN     = "sing-box"
+RULESET_VERSION  = 2
+TIMEOUT          = 60
+CST              = timezone(timedelta(hours=8))
+REPO_USER        = "emanresubuh"
+REPO_NAME        = "ad-rules"
+SRS_URL          = "https://raw.githubusercontent.com/" + REPO_USER + "/" + REPO_NAME + "/main/rule_srs/adblock_rules.srs"
 # -------------------------
 
-HOSTS_RE   = re.compile(r"^(?:0\.0\.0\.0|127\.0\.0\.1|::1)\s+([a-z0-9.-]+\.[a-z]{2,})")
-ADGUARD_RE = re.compile(r"^\|\|([a-z0-9.-]+\.[a-z]{2,})\^")
-DOMAIN_RE  = re.compile(r"^([a-z0-9][a-z0-9-]{0,61}[a-z0-9](?:\.[a-z0-9][a-z0-9-]{0,61}[a-z0-9])+)$")
+HOSTS_RE      = re.compile(r"^(?:0\.0\.0\.0|127\.0\.0\.1|::1)\s+([a-z0-9.-]+\.[a-z]{2,})")
+ADGUARD_RE    = re.compile(r"^\|\|([a-z0-9.-]+\.[a-z]{2,})\^")
+DOMAIN_RE     = re.compile(r"^([a-z0-9][a-z0-9-]{0,61}[a-z0-9](?:\.[a-z0-9][a-z0-9-]{0,61}[a-z0-9])+)$")
+SKIP_LINE_RE  = re.compile(r"https?://|/")
+COSMETIC_RE   = re.compile(r"#[@$?]?#|#%#|#script:")
 
 INVALID_DOMAINS = {
     "localhost", "local", "broadcasthost", "ip6-localhost",
     "ip6-loopback", "ip6-localnet", "ip6-mcastprefix",
     "ip6-allnodes", "ip6-allrouters", "ip6-allhosts"
+}
+
+WHITELIST_DOMAINS = {
+    "raw.githubusercontent.com",
+    "github.com",
+    "githubusercontent.com",
 }
 
 
@@ -69,7 +77,7 @@ def load_custom(path: str) -> set:
             line = line.strip().lower()
             if line and not line.startswith(("#", "//", ";")):
                 d = normalize_domain(line)
-                if DOMAIN_RE.match(d) and d not in INVALID_DOMAINS:
+                if DOMAIN_RE.match(d) and d not in INVALID_DOMAINS and d not in WHITELIST_DOMAINS:
                     domains.add(d)
     return domains
 
@@ -108,24 +116,37 @@ def parse_rules(text: str) -> set:
         if not line or line.startswith(("!", "#", "@@")):
             continue
 
+        # 跳过 cosmetic/脚本规则：## #@# #$# #%# #?# #script:
+        if COSMETIC_RE.search(line):
+            continue
+
+        # 跳过包含 http 或路径斜杠的行，避免误提取 URL 中的域名
+        if SKIP_LINE_RE.search(line):
+            continue
+
+        # 1. AdGuard 格式：||example.com^
         m = ADGUARD_RE.match(line)
         if m:
             d = normalize_domain(m.group(1))
-            if d not in INVALID_DOMAINS:
+            if d not in INVALID_DOMAINS and d not in WHITELIST_DOMAINS:
                 domains.add(d)
             continue
 
+        # 2. Hosts 格式：0.0.0.0 example.com
         m = HOSTS_RE.match(line)
         if m:
             d = normalize_domain(m.group(1))
-            if d not in INVALID_DOMAINS:
+            if d not in INVALID_DOMAINS and d not in WHITELIST_DOMAINS:
                 domains.add(d)
             continue
 
+        # 3. 纯域名格式
         parts = line.split()
         if parts:
             candidate = normalize_domain(parts[0])
-            if DOMAIN_RE.match(candidate) and candidate not in INVALID_DOMAINS:
+            if (DOMAIN_RE.match(candidate)
+                    and candidate not in INVALID_DOMAINS
+                    and candidate not in WHITELIST_DOMAINS):
                 domains.add(candidate)
 
     return domains
