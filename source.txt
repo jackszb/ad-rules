@@ -4,3 +4,4 @@ https://raw.githubusercontent.com/TG-Twilight/AWAvenue-Ads-Rule/main/AWAvenue-Ad
 https://anti-ad.net/adguard.txt
 https://raw.githubusercontent.com/AdguardTeam/HostlistsRegistry/main/filters/general/filter_1_DnsFilter/filter.txt
 https://raw.githubusercontent.com/cbuijs/oisd/master/small/domains.adblock
+https://raw.githubusercontent.com/cbuijs/1hosts/main/Lite/domains.adblock
