@@ -4,6 +4,11 @@
 convert.py
 针对 sing-box 1.13.x 版本优化
 功能：多源下载 -> 严格解析 -> 全局去重 -> 子域名去冗余 -> 自定义规则 -> PSL保护 -> 生成 JSON -> 编译 SRS -> 统计报告 -> 更新 README
+
+修复记录：
+  - DOMAIN_RE 原正则要求每个 label 至少 2 字符，导致含单字符 label 的域名
+    （如 e.qq.com、a.cn、sdk.e.qq.com）被 should_keep_domain 误过滤。
+    已修正为允许单字符 label。
 """
 
 import re
@@ -24,7 +29,7 @@ SRS_OUTPUT       = "adblock_rules.srs"
 STATS_FILE       = "stats.json"
 REPORT_FILE      = "release_notes.md"
 SING_BOX_BIN     = "sing-box"
-RULESET_VERSION  = 4
+RULESET_VERSION  = 3
 TIMEOUT          = 60
 FETCH_RETRIES    = 3
 RETRY_BACKOFF    = 2
@@ -41,8 +46,12 @@ ADGUARD_RE   = re.compile(r"^\|\|([a-z0-9*.-]+\.[a-z]{2,})\^")
 HOSTS_RE     = re.compile(r"^(?:0\.0\.0\.0|127\.0\.0\.1|::1)\s+([a-z0-9.-]+\.[a-z]{2,})")
 # dnsmasq 格式：address=/example.com/
 DNSMASQ_RE   = re.compile(r"^address=/([a-z0-9.-]+\.[a-z]{2,})/")
-# 纯域名格式校验
-DOMAIN_RE    = re.compile(r"^([a-z0-9][a-z0-9-]{0,61}[a-z0-9](?:\.[a-z0-9][a-z0-9-]{0,61}[a-z0-9])+)$")
+
+# 修复：原正则 [a-z0-9][a-z0-9-]{0,61}[a-z0-9] 要求每个 label 至少 2 字符，
+# 导致 e.qq.com 中的单字符 label "e" 无法匹配，整个域名被误过滤。
+# 新正则：每个 label 允许 1~63 字符，兼容单字符 label（如 e、a、i）。
+DOMAIN_RE    = re.compile(r"^([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+)$")
+
 # cosmetic/脚本规则（整行跳过）
 COSMETIC_RE  = re.compile(r"#[@$?]?#|#%#|#script:")
 
@@ -392,6 +401,23 @@ def run_self_test():
     r = parse_rules("https://ads.example.com/banner")
     if "ads.example.com" in r:
         errors.append("FAIL: URL 行被误提取")
+
+    # 【修复验证】单字符 label 域名不应被过滤
+    r = parse_rules("||e.qq.com^")
+    if "e.qq.com" not in r:
+        errors.append("FAIL: 单字符 label 域名 e.qq.com 被 DOMAIN_RE 误过滤")
+
+    # 【修复验证】含单字符 label 的三级域名
+    r = parse_rules("||sdk.e.qq.com^")
+    if "sdk.e.qq.com" not in r:
+        errors.append("FAIL: 含单字符 label 的 sdk.e.qq.com 被 DOMAIN_RE 误过滤")
+
+    # 【修复验证】sdk.e.qq.com 应在 e.qq.com 存在时被去冗余
+    deduped = dedupe_subdomains({"e.qq.com", "sdk.e.qq.com", "other.qq.com"})
+    if "sdk.e.qq.com" in deduped:
+        errors.append("FAIL: sdk.e.qq.com 在父域 e.qq.com 存在时未被去冗余")
+    if "e.qq.com" not in deduped:
+        errors.append("FAIL: e.qq.com 被去冗余误删")
 
     if errors:
         for e in errors:
