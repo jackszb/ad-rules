@@ -1,6 +1,5 @@
 https://raw.githubusercontent.com/hagezi/dns-blocklists/main/adblock/native.apple.txt
-https://raw.githubusercontent.com/hagezi/dns-blocklists/main/adblock/pro.plus.txt
+https://raw.githubusercontent.com/hagezi/dns-blocklists/main/adblock/pro.txt
 https://raw.githubusercontent.com/TG-Twilight/AWAvenue-Ads-Rule/main/AWAvenue-Ads-Rule.txt
-https://anti-ad.net/adguard.txt
 https://adguardteam.github.io/AdGuardSDNSFilter/Filters/filter.txt
 https://raw.githubusercontent.com/sjhgvr/oisd/main/oisd_big.txt
